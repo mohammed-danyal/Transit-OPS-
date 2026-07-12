@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { TransitProvider, useTransit } from './context/TransitContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import * as Icons from './Icons';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import UserManagement from './pages/UserManagement';
+import AccessDenied from './pages/AccessDenied';
 
 function AppContent() {
-  const {
-    activeRole,
-    setActiveRole,
+  const { user, logout } = useAuth();
+  const activeRole = user?.role || 'Fleet Manager';
+
+    const {
+
     currentTab,
     setCurrentTab,
     darkMode,
@@ -33,11 +41,6 @@ function AppContent() {
     addFuelLogRecord,
     addExpenseRecord
   } = useTransit();
-
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authError, setAuthError] = useState('');
 
   const [vehicleModal, setVehicleModal] = useState({ open: false, mode: 'create', data: null });
   const [driverModal, setDriverModal] = useState({ open: false, mode: 'create', data: null });
@@ -67,41 +70,8 @@ function AppContent() {
 
   const canEditFleet = activeRole === 'Fleet Manager';
   const canEditDrivers = activeRole === 'Fleet Manager' || activeRole === 'Safety Officer';
-  const canDispatchTrips = activeRole === 'Fleet Manager' || activeRole === 'Driver';
+  const canDispatchTrips = activeRole === 'Fleet Manager' || activeRole === 'Dispatcher' || activeRole === 'Driver';
   const canEditExpenses = activeRole === 'Fleet Manager' || activeRole === 'Financial Analyst';
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (!authEmail || !authPassword) {
-      setAuthError('Please enter email and password.');
-      return;
-    }
-    
-    if (authEmail.includes('manager')) {
-      setActiveRole('Fleet Manager');
-    } else if (authEmail.includes('driver')) {
-      setActiveRole('Driver');
-    } else if (authEmail.includes('safety')) {
-      setActiveRole('Safety Officer');
-    } else if (authEmail.includes('finance')) {
-      setActiveRole('Financial Analyst');
-    } else {
-      setActiveRole('Fleet Manager');
-    }
-    
-    setIsAuthenticated(true);
-    setAuthError('');
-  };
-
-  const handleQuickLogin = (email) => {
-    setAuthEmail(email);
-    setAuthPassword('password123');
-    if (email.includes('manager')) setActiveRole('Fleet Manager');
-    if (email.includes('driver')) setActiveRole('Driver');
-    if (email.includes('safety')) setActiveRole('Safety Officer');
-    if (email.includes('finance')) setActiveRole('Financial Analyst');
-    setIsAuthenticated(true);
-  };
 
   const openVehicleCreate = () => {
     setFormError('');
@@ -330,76 +300,7 @@ function AppContent() {
     document.body.removeChild(link);
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="auth-container animate-fade">
-        <div className="auth-card">
-          <div className="auth-header">
-            <div className="auth-logo">T</div>
-            <h2 className="auth-title">TransitOps</h2>
-            <p className="auth-subtitle">Smart Transport Operations Platform</p>
-          </div>
-          
-          {authError && (
-            <div className="form-error-banner">
-              <Icons.AlertIcon size={18} />
-              <span>{authError}</span>
-            </div>
-          )}
 
-          <form onSubmit={handleLogin}>
-            <div className="form-group" style={{ textAlign: 'left' }}>
-              <label className="form-label">Email Address</label>
-              <input 
-                type="email" 
-                className="form-control" 
-                placeholder="manager@transitops.com"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-              />
-            </div>
-            
-            <div className="form-group" style={{ textAlign: 'left' }}>
-              <label className="form-label">Password</label>
-              <input 
-                type="password" 
-                className="form-control" 
-                placeholder="••••••••"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}>
-              <Icons.ShieldIcon size={18} />
-              Sign In Securely
-            </button>
-          </form>
-
-          <div style={{ margin: '24px 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ flexGrow: 1, height: '1px', backgroundColor: 'var(--card-border)' }}></div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Quick Demo Logins</span>
-            <div style={{ flexGrow: 1, height: '1px', backgroundColor: 'var(--card-border)' }}></div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px' }} onClick={() => handleQuickLogin('manager@transitops.com')}>
-              Fleet Manager
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px' }} onClick={() => handleQuickLogin('driver@transitops.com')}>
-              Driver View
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px' }} onClick={() => handleQuickLogin('safety@transitops.com')}>
-              Safety Officer
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px' }} onClick={() => handleQuickLogin('finance@transitops.com')}>
-              Financial Analyst
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const filteredVehicles = vehicles.filter(v => {
     const matchesSearch = v.registrationNumber.toLowerCase().includes(vehicleSearch.toLowerCase()) || 
@@ -433,33 +334,50 @@ function AppContent() {
             <Icons.DashboardIcon size={20} /> Dashboard
           </button>
           
-          <button className={`nav-item ${currentTab === 'vehicles' ? 'active' : ''}`} onClick={() => setCurrentTab('vehicles')}>
-            <Icons.VehicleIcon size={20} /> Vehicles Registry
-          </button>
+          {(activeRole === 'Fleet Manager' || activeRole === 'Dispatcher') && (
+            <>
+              <button className={`nav-item ${currentTab === 'vehicles' ? 'active' : ''}`} onClick={() => setCurrentTab('vehicles')}>
+                <Icons.VehicleIcon size={20} /> Vehicles Registry
+              </button>
+              <button className={`nav-item ${currentTab === 'trips' ? 'active' : ''}`} onClick={() => setCurrentTab('trips')}>
+                <Icons.TripIcon size={20} /> Trip Management
+              </button>
+            </>
+          )}
 
-          <button className={`nav-item ${currentTab === 'drivers' ? 'active' : ''}`} onClick={() => setCurrentTab('drivers')}>
-            <Icons.DriverIcon size={20} /> Drivers Profile
-          </button>
+          {(activeRole === 'Fleet Manager' || activeRole === 'Dispatcher' || activeRole === 'Safety Officer') && (
+            <button className={`nav-item ${currentTab === 'drivers' ? 'active' : ''}`} onClick={() => setCurrentTab('drivers')}>
+              <Icons.DriverIcon size={20} /> Drivers Profile
+            </button>
+          )}
 
-          <button className={`nav-item ${currentTab === 'trips' ? 'active' : ''}`} onClick={() => setCurrentTab('trips')}>
-            <Icons.TripIcon size={20} /> Trip Management
-          </button>
+          {(activeRole === 'Fleet Manager' || activeRole === 'Safety Officer') && (
+            <button className={`nav-item ${currentTab === 'maintenance' ? 'active' : ''}`} onClick={() => setCurrentTab('maintenance')}>
+              <Icons.MaintenanceIcon size={20} /> Maintenance
+            </button>
+          )}
 
-          <button className={`nav-item ${currentTab === 'maintenance' ? 'active' : ''}`} onClick={() => setCurrentTab('maintenance')}>
-            <Icons.MaintenanceIcon size={20} /> Maintenance
-          </button>
+          {(activeRole === 'Fleet Manager' || activeRole === 'Financial Analyst') && (
+            <button className={`nav-item ${currentTab === 'expenses' ? 'active' : ''}`} onClick={() => setCurrentTab('expenses')}>
+              <Icons.ExpenseIcon size={20} /> Expenses & Fuel
+            </button>
+          )}
 
-          <button className={`nav-item ${currentTab === 'expenses' ? 'active' : ''}`} onClick={() => setCurrentTab('expenses')}>
-            <Icons.ExpenseIcon size={20} /> Expenses & Fuel
-          </button>
-
-          <button className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`} onClick={() => setCurrentTab('reports')}>
-            <Icons.ReportIcon size={20} /> Reports & Analytics
-          </button>
+          {(activeRole === 'Fleet Manager' || activeRole === 'Financial Analyst') && (
+            <button className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`} onClick={() => setCurrentTab('reports')}>
+              <Icons.ReportIcon size={20} /> Reports & Analytics
+            </button>
+          )}
+          
+          {activeRole === 'Fleet Manager' && (
+            <button className="nav-item mt-4 border-t border-slate-200 pt-4" onClick={() => window.location.href = '/users'}>
+              <Icons.DriverIcon size={20} /> User Management
+            </button>
+          )}
         </nav>
 
         <div className="sidebar-footer">
-          <button className="nav-item" onClick={() => setIsAuthenticated(false)}>
+          <button className="nav-item" onClick={logout}>
             <Icons.DownloadIcon size={20} style={{ transform: 'rotate(90deg)' }} /> Log Out
           </button>
         </div>
@@ -476,15 +394,8 @@ function AppContent() {
             <button className="theme-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle Theme">
               {darkMode ? <Icons.SunIcon size={20} /> : <Icons.MoonIcon size={20} />}
             </button>
-
             <div className="role-picker">
-              <span className="role-picker-label">Role:</span>
-              <select className="role-select" value={activeRole} onChange={(e) => setActiveRole(e.target.value)}>
-                <option value="Fleet Manager">Fleet Manager</option>
-                <option value="Driver">Driver</option>
-                <option value="Safety Officer">Safety Officer</option>
-                <option value="Financial Analyst">Financial Analyst</option>
-              </select>
+              <span className="role-picker-label">User: {user?.name} ({activeRole})</span>
             </div>
           </div>
         </header>
@@ -2028,9 +1939,33 @@ function AppContent() {
 
 function App() {
   return (
-    <TransitProvider>
-      <AppContent />
-    </TransitProvider>
+    <Router>
+      <AuthProvider>
+        <TransitProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/access-denied" element={<AccessDenied />} />
+            <Route 
+              path="/users" 
+              element={
+                <ProtectedRoute allowedRoles={['Fleet Manager']}>
+                  <UserManagement />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <AppContent />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </TransitProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
